@@ -19,6 +19,43 @@ from utils.config import (
     DATE_COLUMNS,
 )
 
+
+# ===============================================================
+# 0. PRE-LIMPIEZA GLOBAL
+# ===============================================================
+
+
+def clean_quotes_global(df: pl.DataFrame | pd.DataFrame) -> pl.DataFrame | pd.DataFrame:
+    """
+    Elimina comillas dobles (") de:
+    1. Los nombres de las columnas.
+    2. Todas las celdas de tipo string.
+
+    Se debe ejecutar PRIMERO para normalizar el esquema.
+    """
+    print("🛡️ SANEANDO COMILLAS DOBLES...")
+
+    if isinstance(df, pd.DataFrame):
+        # 1. Limpiar columnas
+        df.columns = df.columns.str.replace('"', "", regex=False)
+        # 2. Limpiar datos (globalmente con regex es costoso, pero efectivo para este caso)
+        # Se puede optimizar aplicando solo a columnas object, pero mantenemos la lógica original solicitada
+        df = df.replace('"', "", regex=True)
+        return df
+
+    # --- POLARS ---
+    # 1. Renombrar columnas (quitar comillas de los encabezados)
+    # Usamos un diccionario de comprensión para renombrar todo de una vez
+    df = df.rename({col: col.replace('"', "") for col in df.columns})
+
+    # 2. Reemplazar comillas en todas las columnas de tipo String
+    # pl.col(pl.String) selecciona automáticamente todas las columnas de texto
+    df = df.with_columns(pl.col(pl.String).str.replace_all('"', "", literal=True))
+
+    print("✓ Comillas eliminadas en estructura y datos")
+    return df
+
+
 # ===============================================================
 # 1. LIMPIEZA DE STRINGS
 # ===============================================================
@@ -273,6 +310,84 @@ def remove_duplicates(df, subset_columns=None):
 
 
 # ===============================================================
+# 7a. REGLAS DE NEGOCIO (Exclusiones e Imputaciones)
+# ===============================================================
+
+
+def apply_business_rules(
+    df: pl.DataFrame | pd.DataFrame,
+) -> pl.DataFrame | pd.DataFrame:
+    """
+    Aplica lógica específica del negocio:
+    1. Elimina columnas que no aportan valor (FECHA_APERTURA_TEXTO, ANTIGUO).
+    2. Imputa valores por defecto en claves catastrales ("Sin folio").
+
+    NOTA: La columna 'VALOR' se conserva intencionalmente.
+    """
+    print("⚖️ Aplicando reglas de negocio específicas...")
+
+    # --- COLUMNAS A ELIMINAR ---
+    # Ya NO incluimos "VALOR" aquí porque decidiste mantenerla
+    cols_to_drop = ["FECHA_APERTURA_TEXTO", "NUMERO_CATASTRAL_ANTIGUO"]
+
+    # --- PANDAS ---
+    if isinstance(df, pd.DataFrame):
+        # Eliminar
+        existing_drop = [c for c in cols_to_drop if c in df.columns]
+        if existing_drop:
+            df = df.drop(columns=existing_drop)
+
+        # Imputar
+        if "FOLIOS_DERIVADOS" in df.columns:
+            df["FOLIOS_DERIVADOS"] = df["FOLIOS_DERIVADOS"].fillna("Sin folio")
+
+        if "NUMERO_CATASTRAL" in df.columns:
+            # Convertir a string para aceptar texto "sin folio"
+            df["NUMERO_CATASTRAL"] = (
+                df["NUMERO_CATASTRAL"]
+                .astype(str)
+                .replace("nan", "sin folio")
+                .fillna("sin folio")
+            )
+
+        return df
+
+    # --- POLARS ---
+    # 1. Eliminar columnas no deseadas
+    existing_drop = [c for c in cols_to_drop if c in df.columns]
+    if existing_drop:
+        print(f"   - Eliminando: {existing_drop}")
+        df = df.drop(existing_drop)
+
+    # 2. Imputaciones (Usamos expresiones para eficiencia)
+    imputation_exprs = []
+
+    if "FOLIOS_DERIVADOS" in df.columns:
+        imputation_exprs.append(
+            pl.col("FOLIOS_DERIVADOS")
+            .cast(pl.String, strict=False)  # Asegurar tipo texto
+            .fill_null(pl.lit("Sin folio"))
+            .alias("FOLIOS_DERIVADOS")
+        )
+
+    if "NUMERO_CATASTRAL" in df.columns:
+        imputation_exprs.append(
+            pl.col("NUMERO_CATASTRAL")
+            .cast(
+                pl.String, strict=False
+            )  # Convertir a String para mezclar números y texto
+            .fill_null(pl.lit("sin folio"))
+            .alias("NUMERO_CATASTRAL")
+        )
+
+    if imputation_exprs:
+        df = df.with_columns(imputation_exprs)
+
+    print("✓ Reglas de negocio aplicadas")
+    return df
+
+
+# ===============================================================
 # 8. FUNCIÓN PRINCIPAL
 # ===============================================================
 
@@ -280,18 +395,29 @@ def remove_duplicates(df, subset_columns=None):
 def apply_all_cleaning(df):
     """
     Ejecuta secuencia completa de limpieza.
-    Orden correcto para evitar errores de tipos.
     """
-
     print("\n" + "=" * 60)
     print("🚀 INICIANDO PROCESO COMPLETO DE LIMPIEZA")
     print("=" * 60)
 
+    # 1. Saneamiento Inicial (Quitar comillas rotas)
+    df = clean_quotes_global(df)
+
+    # 2. Reglas de Negocio (Borrar columnas viejas, imputar folios)
+    # Se ejecuta ANTES de la limpieza de tipos para que las columnas borradas no estorben
+    df = apply_business_rules(df)
+
+    # 3. Normalización de Tipos y Valores
     df = clean_string_columns(df)
     df = clean_municipality_names(df)
     df = clean_department_names(df)
     df = parse_dates(df)
+
+    # 4. Limpieza Numérica (Aquí se procesa la columna VALOR que decidiste guardar)
+    # Convierte a números y pone nulos los negativos
     df = clean_numeric_values(df)
+
+    # 5. Gestión Final de Calidad (Nulos y Duplicados)
     df = handle_missing_values(df)
     df = remove_duplicates(df)
 
