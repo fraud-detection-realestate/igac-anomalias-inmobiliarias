@@ -140,4 +140,4 @@ Este proyecto está en desarrollo activo. Las contribuciones son bienvenidas sig
 
 ---
 
-**Última actualización**: 2025-11-22
+**Última actualización**: 2025-11-23
