@@ -12,8 +12,8 @@ from utils.config import IPC_DATA, BASE_YEAR
 
 def adjust_for_inflation(
     df: pl.DataFrame | pd.DataFrame,
-    value_column: str = "VALOR",
-    year_column: str = "YEAR_RADICA",
+    value_column: float = "VALOR",
+    year_column: float = "YEAR_RADICA",
     base_year: int = BASE_YEAR
 ) -> pl.DataFrame | pd.DataFrame:
     """
@@ -34,18 +34,36 @@ def adjust_for_inflation(
     base_ipc = IPC_DATA[base_year]
     
     if isinstance(df, pl.DataFrame):
-        # Crear mapeo de año a factor de ajuste
-        adjustment_map = {
-            year: base_ipc / ipc 
+        # Evitar usar métodos no soportados por Expr (por ejemplo map_dict en algunas versiones).
+        # Construimos un DataFrame pequeño con factores y hacemos un `join` seguro.
+        factor_items = [
+            (int(year), float(base_ipc / ipc))
             for year, ipc in IPC_DATA.items()
-        }
-        
-        # Aplicar ajuste
+        ]
+
+        adjustment_df = pl.DataFrame({
+            "YEAR": [y for y, _ in factor_items],
+            "FACTOR": [f for _, f in factor_items]
+        })
+
+        # Asegurar una clave de join en ambos lados y cast seguro
+        join_key = "__YEAR_JOIN__"
         df = df.with_columns([
-            (pl.col(value_column) * 
-             pl.col(year_column).map_dict(adjustment_map, default=1.0))
-            .alias("VALOR_AJUSTADO")
+            pl.col(year_column).cast(pl.Int64, strict=False).alias(join_key)
         ])
+
+        # Renombrar columna YEAR en adjustment_df para que coincida con la llave temporal
+        adjustment_df = adjustment_df.with_columns([
+            pl.col("YEAR").cast(pl.Int64)
+        ]).rename({"YEAR": join_key})
+
+        # Hacer left join para traer el factor correspondiente (si no existe, usar 1.0)
+        df = df.join(adjustment_df, on=join_key, how="left")
+
+        # Calcular VALOR_AJUSTADO y limpiar columnas temporales
+        df = df.with_columns([
+            (pl.col(value_column) * pl.col("FACTOR").fill_null(1.0)).alias("VALOR_AJUSTADO")
+        ]).drop(["FACTOR", join_key])
     else:
         # Pandas
         df['FACTOR_AJUSTE'] = df[year_column].map(
@@ -57,36 +75,85 @@ def adjust_for_inflation(
     print("✓ Valores ajustados por inflación")
     return df
 
-
 def create_temporal_features(
     df: pl.DataFrame | pd.DataFrame,
     date_column: str = "FECHA_RADICA_TEXTO"
 ) -> pl.DataFrame | pd.DataFrame:
     """
-    Crea campos temporales derivados (mes, trimestre, semestre).
-    
-    Args:
-        df: DataFrame con columna de fecha
-        date_column: Nombre de la columna de fecha
-        
-    Returns:
-        DataFrame con campos temporales adicionales
+    Crea características temporales para TODAS las columnas de fecha
     """
-    print("Creando campos temporales derivados...")
-    
+    print("Creando campos temporales...")
+
     if isinstance(df, pl.DataFrame):
-        df = df.with_columns([
-            pl.col(date_column).dt.month().alias("MES_RADICA"),
-            pl.col(date_column).dt.quarter().alias("TRIMESTRE_RADICA"),
-            ((pl.col(date_column).dt.month() - 1) // 6 + 1).alias("SEMESTRE_RADICA"),
-            pl.col(date_column).dt.weekday().alias("DIA_SEMANA_RADICA")
-        ])
-    else:
-        df['MES_RADICA'] = df[date_column].dt.month
-        df['TRIMESTRE_RADICA'] = df[date_column].dt.quarter
-        df['SEMESTRE_RADICA'] = (df[date_column].dt.month - 1) // 6 + 1
-        df['DIA_SEMANA_RADICA'] = df[date_column].dt.weekday
-    
+        # Procesar TODAS las columnas de fecha que existan
+        date_columns_to_process = [
+            col for col in ["FECHA_RADICA_TEXTO", "FECHA_APERTURA_TEXTO"] 
+            if col in df.columns
+        ]
+        
+        for col in date_columns_to_process:
+            print(f"  Procesando {col} (tipo: {df[col].dtype})...")
+            
+            # Determinar si necesita parseo o ya es fecha
+            if df[col].dtype in [pl.Date, pl.Datetime]:
+                date_expr = pl.col(col)
+                print("    Ya es tipo Date/Datetime")
+            else:
+                # La columna es string, parsear desde formato dd/mm/yyyy
+                print("    Parseando desde string...")
+                date_expr = pl.coalesce([
+                    # Tu formato principal: dd/mm/yyyy (20/12/2015)
+                    pl.col(col).str.strptime(pl.Date, format="%d/%m/%Y", strict=False),
+                    
+                    # Formatos alternativos por si acaso
+                    pl.col(col).str.strptime(pl.Date, format="%Y-%m-%d %H:%M:%S", strict=False),
+                    pl.col(col).str.strptime(pl.Date, format="%Y-%m-%d", strict=False),
+                    pl.col(col).str.strptime(pl.Date, format="%d-%m-%Y", strict=False),
+                    pl.col(col).str.strptime(pl.Date, format="%Y/%m/%d", strict=False),
+                    
+                    # Año corto como fallback
+                    pl.col(col).str.strptime(pl.Date, format="%d/%m/%y", strict=False),
+                    pl.col(col).str.strptime(pl.Date, format="%d-%m-%y", strict=False),
+                ])
+            
+            # Crear sufijos únicos por columna
+            suffix = "_RADICA" if "RADICA" in col else "_APERTURA"
+            
+            # Crear columnas temporales
+            df = df.with_columns([
+                date_expr.dt.year().alias(f"ANIO{suffix}"),
+                date_expr.dt.month().alias(f"MES{suffix}"),
+                date_expr.dt.quarter().alias(f"TRIMESTRE{suffix}"),
+                ((date_expr.dt.month() - 1) // 6 + 1).alias(f"SEMESTRE{suffix}"),
+                date_expr.dt.weekday().alias(f"DIA_SEMANA{suffix}")
+            ])
+            
+            # Verificar cuántas fechas no se parsearon
+            failed = df[f"MES{suffix}"].null_count()
+            total = len(df)
+            if failed > 0:
+                print(f"    ⚠ {failed:,} de {total:,} fechas no parseadas ({failed/total*100:.2f}%)")
+            else:
+                print(f"    ✓ Todas las fechas parseadas correctamente")
+
+    else:  # Pandas
+        if date_column in df.columns:
+            # Parseo flexible con dayfirst=True para formato dd/mm/yyyy
+            df[date_column + '_parsed'] = pd.to_datetime(
+                df[date_column], 
+                format='%d/%m/%Y',  # Especificar formato exacto
+                errors='coerce'
+            )
+            df['ANIO_RADICA'] = df[date_column + '_parsed'].dt.year
+            df['MES_RADICA'] = df[date_column + '_parsed'].dt.month
+            df['TRIMESTRE_RADICA'] = df[date_column + '_parsed'].dt.quarter
+            df['SEMESTRE_RADICA'] = (df[date_column + '_parsed'].dt.month - 1) // 6 + 1
+            df['DIA_SEMANA_RADICA'] = df[date_column + '_parsed'].dt.weekday
+            
+            failed = df[date_column + '_parsed'].isna().sum()
+            if failed > 0:
+                print(f"  ⚠ {failed:,} fechas no parseadas")
+
     print("✓ Campos temporales creados")
     return df
 
@@ -179,11 +246,11 @@ def apply_all_standardization(df: pl.DataFrame | pd.DataFrame) -> pl.DataFrame |
     print("INICIANDO ESTANDARIZACIÓN DE DATOS")
     print("="*50 + "\n")
     
-    df = normalize_divipola_codes(df)
+    #df = normalize_divipola_codes(df)
     df = create_temporal_features(df)
     df = adjust_for_inflation(df)
     df = create_geographic_key(df)
-    df = calculate_derived_metrics(df)
+    #df = calculate_derived_metrics(df)
     
     print("\n" + "="*50)
     print("ESTANDARIZACIÓN FINALIZADA")

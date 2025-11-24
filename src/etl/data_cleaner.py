@@ -6,6 +6,7 @@ manejar nulos y duplicados.
 
 import polars as pl
 import pandas as pd
+import numpy as np
 import re
 from pathlib import Path
 import sys
@@ -38,7 +39,7 @@ def clean_string_columns(df: pl.DataFrame | pd.DataFrame):
     # Columnas que normalmente deberían ser string
     expected_str_columns = [
         "MATRICULA",
-        "ORIP",
+        #"ORIP",
         "DIVIPOLA",
         "TIPO_PREDIO_ZONA",
         "CATEGORIA_RURALIDAD",
@@ -156,32 +157,81 @@ def clean_department_names(df):
 
 
 def parse_dates(df: pl.DataFrame | pd.DataFrame) -> pl.DataFrame | pd.DataFrame:
-    print("Parseando columnas de fecha...")
+   
+    print("  📅 Parseando y estandarizando fechas...")
 
     if isinstance(df, pl.DataFrame):
         for col in DATE_COLUMNS:
-            if col in df.columns:
-                # Si ya es datetime → no hacer nada
-                if df[col].dtype == pl.Datetime:
-                    continue
-
-                # Si no es string → forzar a string para poder hacer str.strptime
-                if df[col].dtype != pl.String:
-                    df = df.with_columns(
-                        [pl.col(col).cast(pl.String, strict=False).alias(col)]
-                    )
-
-                # Ahora sí parsear
+            if col not in df.columns:
+                continue
+            
+            print(f"     Procesando {col} (tipo: {df[col].dtype})...")
+            
+            # Contar nulos ANTES
+            null_count_before = df[col].null_count()
+            
+            # Si ya es Date o Datetime, convertir directamente
+            if df[col].dtype in [pl.Date, pl.Datetime]:
                 df = df.with_columns(
-                    [pl.col(col).str.strptime(pl.Datetime, strict=False).alias(col)]
+                    pl.col(col).dt.strftime("%d/%m/%Y").alias(col)  # ← %Y (año 4 dígitos)
                 )
+                print(f"       ✓ Convertido de datetime a dd/mm/yyyy")
+                continue
+            
+            # Si es numérico (solo año), mantener como está
+            if df[col].dtype in [pl.Int64, pl.Int32, pl.Float64, pl.Float32]:
+                print(f"       ⚠ Columna numérica, se mantiene")
+                continue
+            
+            # Convertir a string si no lo es
+            if df[col].dtype not in [pl.String, pl.Utf8]:
+                df = df.with_columns(
+                    pl.col(col).cast(pl.Utf8, strict=False).alias(col)
+                )
+            
+            # Parsear TODOS los formatos posibles con coalesce
+            df = df.with_columns(
+                pl.coalesce([
+                    # Formato: 2018-02-05 00:00:00 (con hora)
+                    pl.col(col).str.strptime(pl.Date, format="%Y-%m-%d %H:%M:%S", strict=False),
+                    
+                    # Formato: 2018-02-05 (sin hora)
+                    pl.col(col).str.strptime(pl.Date, format="%Y-%m-%d", strict=False),
+                    
+                    # Formato: 05/02/2018 (dd/mm/yyyy) - año completo
+                    pl.col(col).str.strptime(pl.Date, format="%d/%m/%Y", strict=False),
+                    
+                    # Formato: 05/02/18 (dd/mm/yy) - año corto
+                    pl.col(col).str.strptime(pl.Date, format="%d/%m/%y", strict=False),
+                    
+                    # Formato: 05-02-2018 (dd-mm-yyyy)
+                    pl.col(col).str.strptime(pl.Date, format="%d-%m-%Y", strict=False),
+                    
+                    # Formato: 05-02-18 (dd-mm-yy)
+                    pl.col(col).str.strptime(pl.Date, format="%d-%m-%y", strict=False),
+                    
+                    # Formato: 2018/02/05 (yyyy/mm/dd)
+                    pl.col(col).str.strptime(pl.Date, format="%Y/%m/%d", strict=False),
+                ])
+                .dt.strftime("%d/%m/%Y")  # ← Cambio clave: %Y en lugar de %y
+                .alias(col)
+            )
+            
+            # Contar nulos DESPUÉS
+            null_count_after = df[col].null_count()
+            
+            if null_count_after > null_count_before:
+                print(f"       ⚠ ADVERTENCIA: {null_count_after - null_count_before:,} fechas no pudieron parsearse")
+            else:
+                print(f"       ✓ Parseado exitoso: {null_count_before:,} → {null_count_after:,} nulos")
 
-    else:
+    else:  # Pandas
         for col in DATE_COLUMNS:
             if col in df.columns:
-                df[col] = pd.to_datetime(df[col], errors="coerce")
+                df[col] = pd.to_datetime(df[col], errors="coerce", dayfirst=True)
+                df[col] = df[col].dt.strftime("%d/%m/%Y")  # ← %Y (año 4 dígitos)
 
-    print("✓ Fechas parseadas")
+    print("  ✓ Fechas estandarizadas al formato dd/mm/yyyy")
     return df
 
 
@@ -227,26 +277,60 @@ def clean_numeric_values(df):
 # ===============================================================
 
 
-def handle_missing_values(df, strategy="report"):
-    print(f"Manejando valores nulos: estrategia {strategy}")
-
-    if isinstance(df, pd.DataFrame):
-        if strategy == "drop":
-            df = df.dropna(subset=CRITICAL_COLUMNS)
-        elif strategy == "fill":
-            df = df.fillna(0)
-        return df
-
-    if strategy == "drop":
-        for col in CRITICAL_COLUMNS:
-            if col in df.columns:
-                df = df.filter(pl.col(col).is_not_null())
-
-    elif strategy == "fill":
+def handle_missing_values(df, strategy="fill"):
+    """Maneja valores nulos en DataFrame de Polars de forma simple y directa"""
+    
+    print(f"Manejando valores nulos: estrategia '{strategy}'")
+    
+    # Reemplazos específicos
+    specific_fill = {
+        "NUMERO_CATASTRAL": "SIN_NUMERO_CATASTRAL",
+        "NUMERO_CATASTRAL_ANTIGUO": "SIN_NUMERO_CATASTRAL_ANTIGUO",
+        "ESTADO_FOLIO": "INACTIVO",
+        "FOLIOS_DERIVADOS": "SIN_FOLIO",
+        "DOCUMENTO_JUSTIFICATIVO": "SIN_DOCUMENTO_JUSTIFICATIVO",
+        #"ORIP": "SIN_ORIP"
+        }
+  
+    
+    # Crear expresiones para todas las columnas de una vez
+    fill_exprs = []
+    
+    for col, fill_value in specific_fill.items():
+        if col not in df.columns:
+            continue
+        
+        # Contar nulos antes
+        null_count = df[col].null_count()
+        if null_count > 0:
+            print(f"     {col}: {null_count:,} nulos detectados")
+        
+        # Reemplazar nulos Y strings vacíos/problemáticos
+        expr = (
+            pl.when(
+                pl.col(col).is_null() |
+                (pl.col(col).cast(pl.Utf8).str.strip_chars() == "") |
+                (pl.col(col).cast(pl.Utf8).str.to_lowercase().is_in(["null", "none", "nan", "n/a"]))
+            )
+            .then(pl.lit(fill_value))
+            .otherwise(pl.col(col))
+            .alias(col)
+        )
+        fill_exprs.append(expr)
+    
+    # Aplicar todos los reemplazos de una vez
+    if fill_exprs:
+        df = df.with_columns(fill_exprs)
+        print(f"     ✓ Procesadas {len(fill_exprs)} columnas")
+    
+    # Estrategia general para el resto
+    if strategy == "fill":
         df = df.fill_null(0)
-
+        print("     ✓ Nulos restantes llenados con 0")
+    elif strategy == "drop":
+        df = df.drop_nulls()
+    
     return df
-
 
 # ===============================================================
 # 7. DUPLICADOS
