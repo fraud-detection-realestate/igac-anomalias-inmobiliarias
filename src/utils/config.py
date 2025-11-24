@@ -44,7 +44,9 @@ NUMERIC_COLUMNS = [
 ]
 
 # Columnas de fecha
-DATE_COLUMNS = ["FECHA_RADICA_TEXTO", "FECHA_APERTURA_TEXTO"]
+#DATE_COLUMNS = ["FECHA_RADICA_TEXTO", "FECHA_APERTURA_TEXTO"]
+DATE_COLUMNS = ["FECHA_RADICA_TEXTO"]
+
 
 # Mapeo de nombres de municipios (casos comunes de inconsistencia)
 MUNICIPALITY_MAPPING = {
