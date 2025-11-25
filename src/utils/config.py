@@ -1,6 +1,3 @@
-"""
-Configuración y constantes del proyecto de detección de fraude inmobiliario.
-"""
 from pathlib import Path
 
 # Rutas del proyecto
@@ -16,35 +13,58 @@ IGAC_CSV_FILE = RAW_DATA_DIR / "IGAC_2015_-_2023.csv"
 CLEANED_PARQUET_FILE = PROCESSED_DATA_DIR / "igac_cleaned.parquet"
 STANDARDIZED_PARQUET_FILE = PROCESSED_DATA_DIR / "igac_standardized.parquet"
 
+ML_PARQUET_FILE = PROCESSED_DATA_DIR / "igac_ml_base.parquet"
+
 # Parámetros de procesamiento
 CHUNK_SIZE = 100000  # Número de filas por chunk
 SAMPLE_SIZE = 10000  # Tamaño de muestra para exploración rápida
 
 # Columnas del dataset
 COLUMNS = [
-    "PK", "MATRICULA", "FECHA_RADICA_TEXTO", "FECHA_APERTURA_TEXTO",
-    "YEAR_RADICA", "ORIP", "DIVIPOLA", "DEPARTAMENTO", "MUNICIPIO",
-    "TIPO_PREDIO_ZONA", "CATEGORIA_RURALIDAD", "NUM_ANOTACION",
-    "ESTADO_FOLIO", "FOLIOS_DERIVADOS", "Dinámica_Inmobiliaria",
-    "COD_NATUJUR", "NOMBRE_NATUJUR", "NUMERO_CATASTRAL",
-    "NUMERO_CATASTRAL_ANTIGUO", "DOCUMENTO_JUSTIFICATIVO",
-    "COUNT_A", "COUNT_DE", "PREDIOS_NUEVOS", "TIENE_VALOR",
-    "TIENE_MAS_DE_UN_VALOR", "VALOR"
+    "PK",
+    "MATRICULA",
+    "FECHA_RADICA_TEXTO",
+    "FECHA_APERTURA_TEXTO",
+    "YEAR_RADICA",
+    "ORIP",
+    "DIVIPOLA",
+    "DEPARTAMENTO",
+    "MUNICIPIO",
+    "TIPO_PREDIO_ZONA",
+    "CATEGORIA_RURALIDAD",
+    "NUM_ANOTACION",
+    "ESTADO_FOLIO",
+    "FOLIOS_DERIVADOS",
+    "Dinámica_Inmobiliaria",
+    "COD_NATUJUR",
+    "NOMBRE_NATUJUR",
+    "NUMERO_CATASTRAL",
+    "NUMERO_CATASTRAL_ANTIGUO",
+    "DOCUMENTO_JUSTIFICATIVO",
+    "COUNT_A",
+    "COUNT_DE",
+    "PREDIOS_NUEVOS",
+    "TIENE_VALOR",
+    "TIENE_MAS_DE_UN_VALOR",
+    "VALOR",
 ]
 
 # Columnas críticas que no deben tener nulos
-CRITICAL_COLUMNS = [
-    "PK", "MUNICIPIO", "DEPARTAMENTO", "YEAR_RADICA", "VALOR"
-]
+CRITICAL_COLUMNS = ["PK", "MUNICIPIO", "DEPARTAMENTO", "YEAR_RADICA", "VALOR"]
 
 # Columnas numéricas
 NUMERIC_COLUMNS = [
-    "YEAR_RADICA", "COUNT_A", "COUNT_DE", "PREDIOS_NUEVOS",
-    "TIENE_VALOR", "TIENE_MAS_DE_UN_VALOR", "VALOR"
+    "YEAR_RADICA",
+    "COUNT_A",
+    "COUNT_DE",
+    "PREDIOS_NUEVOS",
+    "TIENE_VALOR",
+    "TIENE_MAS_DE_UN_VALOR",
+    "VALOR",
 ]
 
 # Columnas de fecha
-#DATE_COLUMNS = ["FECHA_RADICA_TEXTO", "FECHA_APERTURA_TEXTO"]
+# DATE_COLUMNS = ["FECHA_RADICA_TEXTO", "FECHA_APERTURA_TEXTO"]
 DATE_COLUMNS = ["FECHA_RADICA_TEXTO"]
 
 

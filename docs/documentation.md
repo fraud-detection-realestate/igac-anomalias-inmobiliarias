@@ -29,3 +29,13 @@ Diseñar e implementar un sistema automatizado de monitoreo, análisis y detecci
 - Fortalecimiento de la planeación territorial.
 - Ahorro de tiempo y recursos.
 - Capacidad analítica nacional y municipal para entender la dinámica inmobiliaria.
+
+## Mapeo general de los campos
+
+Campos clave por tipo de uso dentro del proyecto:​
+
+- Identificación y localización: pk, matricula, divipola, departamento, municipio, numero_catastral, numero_catastral_antiguo, orip.​
+- Tiempo y dinámica: fecha_radica_texto, fecha_apertura_texto, year_radica, dinamica_2024, predios_nuevos.​
+- Naturaleza jurídica y estado: cod_natujur, nombre_natujur, estado_folio, documento_justificativo.​
+- Variables de valor y conteos: valor, tiene_valor, tiene_mas_de_un_valor, count_a, count_de.​
+- Caracterización territorial: tipo_predio_zona, categoria_ruralidad_2024.
