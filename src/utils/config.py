@@ -11,7 +11,9 @@ EXTERNAL_DATA_DIR = DATA_DIR / "external"
 # Archivo principal
 IGAC_CSV_FILE = RAW_DATA_DIR / "IGAC_2015_-_2023.csv"
 CLEANED_PARQUET_FILE = PROCESSED_DATA_DIR / "igac_cleaned.parquet"
-STANDARDIZED_PARQUET_FILE = PROCESSED_DATA_DIR / "igac_standardized.parquet"
+STANDARDIZED_PARQUET_FILE = (
+    PROCESSED_DATA_DIR / "igac_standardized.parquet"
+)  ## Dataset limpio
 
 ML_PARQUET_FILE = PROCESSED_DATA_DIR / "igac_ml_base.parquet"
 
