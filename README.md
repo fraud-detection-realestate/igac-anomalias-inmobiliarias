@@ -1,5 +1,23 @@
 # Instituto de Monitoreo y Detección de Anomalías en Dinámica Inmobiliaria en Colombia
 
+[![Python](https://img.shields.io/badge/python-3.12%2B-blue.svg)](https://www.python.org/)
+
+## 📋 Tabla de Contenidos
+
+- [Descripción del Proyecto](#-descripción-del-proyecto)
+- [Objetivos](#-objetivos)
+- [Stack Tecnológico](#-stack-tecnológico)
+- [Estructura del Proyecto](#-estructura-del-proyecto)
+- [Flujo de Datos (ETL)](#-flujo-de-datos-etl)
+- [Estructura del Dataset](#-estructura-del-dataset)
+- [Estado por Fases](#-estado-por-fases)
+- [Instalación](#-instalación)
+- [Uso](#-uso)
+- [Notas Importantes](#-notas-importantes)
+- [Autores](#autores)
+
+---
+
 ## 📋 Descripción del Proyecto
 
 Sistema de análisis y detección de anomalías en transacciones inmobiliarias en Colombia, utilizando datos históricos del IGAC (Instituto Geográfico Agustín Codazzi) del período 2015-2025. El proyecto tiene como objetivo identificar patrones irregulares en el mercado inmobiliario que puedan indicar fraude, lavado de activos o manipulación de precios.
@@ -17,14 +35,23 @@ Este repositorio implementa de forma incremental las **fases definidas en `docs/
 
 ### Procesamiento de Datos
 
-- **Python**: Lenguaje principal para análisis y procesamiento
-- **Polars/Dask**: Manejo eficiente de grandes volúmenes de datos (preferido sobre Pandas para 34M+ filas)
-- **SQL**: Almacenamiento y consultas estructuradas
+- **Python 3.8+**: Lenguaje principal para análisis y procesamiento
+- **Polars**: Manejo eficiente de grandes volúmenes de datos (34M+ filas)
+- **Pandas**: Para operaciones que requieran compatibilidad con bibliotecas específicas
+- **SQLAlchemy**: Para consultas y operaciones con bases de datos
 
 ### Análisis y Visualización
 
-- **Estadística descriptiva**: Cálculo de métricas por municipio y región
-- **Machine Learning**: Modelos de detección de anomalías (a definir)
+- **Matplotlib/Seaborn**: Visualización de datos
+- **Plotly**: Visualizaciones interactivas
+- **Scikit-learn**: Modelos de machine learning y detección de anomalías
+- **NLTK/Spacy**: Procesamiento de lenguaje natural para análisis de texto
+
+### Herramientas de Desarrollo
+
+- **Jupyter Notebooks**: Para análisis exploratorios y documentación ejecutable
+- **Poetry**: Gestión de dependencias
+- **Git**: Control de versiones
 
 ## 🔄 Flujo de Datos (ETL)
 
@@ -142,48 +169,148 @@ La estructura de datos generada en Fase 1 (valores ajustados, campos temporales 
 
 ## 📁 Estructura del Proyecto
 
-```text
-fraud-detection-realestate/
+```
+igac-anomalias-inmobiliarias/
+├── data/                      # Datos (no versionados en Git)
+│   ├── raw/                   # Datos crudos originales
+│   ├── processed/             # Datos procesados y estandarizados
+│   └── models/                # Modelos entrenados
+│
+├── notebooks/                 # Jupyter notebooks de análisis
+│   ├── 01_exploracion_inicial.ipynb    # Análisis exploratorio inicial
+│   ├── 02_limpieza_datos.ipynb         # Proceso de limpieza de datos
+│   ├── 03_estandarizacion.ipynb        # Estandarización de datos
+│   ├── 04_entrenamiento_model.ipynb    # Entrenamiento de modelos
+│   ├── 05_deteccion_anomalias.ipynb    # Detección de anomalías
+│   └── 06_analisis_texto_nlp.ipynb     # Análisis de texto con NLP
+│
+├── src/                       # Código fuente Python
+│   ├── etl/                   # Pipeline de ETL
+│   │   ├── __init__.py
+│   │   ├── data_cleaner.py    # Limpieza de datos
+│   │   ├── data_loader.py     # Carga de datos
+│   │   ├── normalizer.py      # Normalización de datos
+│   │   └── validators.py      # Validación de datos
+│   │
+│   └── utils/                 # Utilidades y helpers
+│
+├── docs/                      # Documentación
+│   ├── task.md                # Fases y procesos del reto
+│   └── documentation.md       # Documentación detallada
+│
 ├── README.md                  # Este archivo
-├── requirements.txt           # Dependencias Python
-├── data/                      # Datos (no versionados)
-│   ├── raw/                   # Datos crudos
-│   ├── processed/             # Datos procesados (ej. igac_cleaned.parquet, igac_standardized.parquet)
-│   └── results/               # Resultados de análisis
-├── notebooks/                 # Jupyter notebooks (02_limpieza_datos, 03_estandarizacion, etc.)
-├── src/                       # Código fuente
-│   ├── etl/                   # Scripts de ETL (carga, limpieza, estandarización)
-│   ├── analysis/              # Scripts de análisis y reglas de negocio (Fase 2+)
-│   └── models/                # Modelos de ML (Fase 3+)
-└── docs/                      # Documentación adicional
-    ├── task.md                # Fases y procesos del reto
-    └── documentation.md       # Descripción y objetivos del sistema
+├── requirements.txt           # Dependencias de Python
+└── pyproject.toml            # Configuración de Poetry (si se usa)
 ```
 
 ## 🔧 Instalación
 
-```bash
-# Clonar el repositorio
-git clone <repository-url>
-cd fraud-detection-realestate
+### Requisitos Previos
 
-# Crear entorno virtual
-python -m venv venv
-source venv/bin/activate  # En Windows: venv\Scripts\activate
+- Python 3.8 o superior
+- Git
+- (Opcional) Poetry para gestión de dependencias
 
-# Instalar dependencias
-pip install -r requirements.txt
-```
+### Configuración del Entorno
+
+1. **Clonar el repositorio**
+
+   ```bash
+   git clone <repository-url>
+   cd igac-anomalias-inmobiliarias
+   ```
+
+2. **Configurar entorno virtual (recomendado)**
+
+   ```bash
+   # Windows
+   python -m venv venv
+   .\venv\Scripts\activate
+   
+   # Linux/MacOS
+   python3 -m venv venv
+   source venv/bin/activate
+   ```
+
+3. **Instalar dependencias**
+
+   ```bash
+   pip install -r requirements.txt
+   
+   # O usando Poetry (si está configurado)
+   poetry install
+   ```
+
+4. **Configurar variables de entorno**
+   Crear un archivo `.env` en la raíz del proyecto con las siguientes variables:
+
+   ```
+   # Rutas de datos
+   RAW_DATA_PATH=./data/raw/
+   PROCESSED_DATA_PATH=./data/processed/
+   MODELS_PATH=./data/models/
+   
+   # Configuración de procesamiento
+   NUM_WORKERS=4  # Número de workers para procesamiento paralelo
+   CHUNK_SIZE=100000  # Tamaño de chunks para procesamiento
+   ```
+
+## 🚀 Uso
+
+### Cargar y procesar datos
+
+1. **Cargar datos crudos**
+
+   ```python
+   from src.etl.data_loader import load_raw_data
+   
+   # Cargar datos en modo lazy (recomendado para conjuntos grandes)
+   df = load_raw_data(lazy=True)
+   ```
+
+2. **Ejecutar limpieza de datos**
+
+   ```python
+   from src.etl.data_cleaner import clean_data
+   
+   # Limpiar datos
+   df_cleaned = clean_data(df)
+   ```
+
+3. **Ejecutar notebooks de análisis**
+   Los notebooks están numerados en orden secuencial:
+   - `01_exploracion_inicial.ipynb`: Análisis exploratorio inicial
+   - `02_limpieza_datos.ipynb`: Proceso de limpieza de datos
+   - `03_estandarizacion.ipynb`: Estandarización de datos
+   - `04_entrenamiento_model.ipynb`: Entrenamiento de modelos
+   - `05_deteccion_anomalias.ipynb`: Detección de anomalías
+   - `06_analisis_texto_nlp.ipynb`: Análisis de texto con NLP
 
 ## 📝 Notas Importantes
 
-- **Volumen de datos**: ~30 millones de registros requieren optimización en procesamiento
-- **Ajuste inflacionario**: Crítico para comparaciones temporales válidas
-- **Calidad de datos**: Se esperan inconsistencias en nombres de municipios y formatos
+### Rendimiento
 
-## 🤝 Contribuciones
+- **Volumen de datos**: El conjunto completo contiene ~34 millones de registros
+- **Uso de memoria**: Se recomienda al menos 16GB de RAM para procesamiento
+- **Procesamiento en chunks**: Las funciones principales soportan procesamiento por lotes
 
-Este proyecto está en desarrollo activo. Las contribuciones son bienvenidas siguiendo las mejores prácticas de análisis de datos y detección de fraude.
+### Calidad de Datos
+
+- **Nombres de municipios**: Se han normalizado variaciones (ej: "Bogotá D.C." → "Bogotá")
+- **Valores faltantes**: Se han manejado siguiendo estrategias documentadas
+- **Validaciones**: Se incluyen validaciones de integridad en `src/etl/validators.py`
+
+### Consideraciones Técnicas
+
+- **Reproducibilidad**: Se recomienda usar entornos virtuales
+- **Versionado**: Se sigue Semantic Versioning (SemVer) para el código
+- **Documentación**: La documentación se actualiza con cada cambio significativo
+
+## Autores
+
+- Juan Carlos Charfuelan
+- Keyla Daniela Cartagena
+- Dylber Denylson Cabrera
 
 ---
 
